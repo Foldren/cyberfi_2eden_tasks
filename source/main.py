@@ -16,8 +16,8 @@ async def get_ai_answers(**kwargs):
     Запускаем таск на получение ответов на вопросы юзеров через OpenAI с проверкой каждые 5 сек.
     """
 
-    conn: Connection = kwargs['conn']  # Redis подключения
-    gt: GoogleTranslator = kwargs['gt']  # Google сессия
+    conn: Connection = kwargs['conn']  # Redis, OpenAI подключения
+    gt: GoogleTranslator = kwargs['gt']  # Google
 
     try:
         lst_chat_id = await conn.rs.questions.keys()
@@ -65,14 +65,13 @@ async def main():
     Функция запуска планировщика
     """
     try:
-        scheduler.start()
-
-        # Инициализируем соединение с redis
+        # Инициализируем соединения с Redis, Google, OpenAI
         conn = await init_conn()  # Redis подключения
-        gt = GoogleTranslator(source='en', target='ru')  # Google сессия
+        gt = GoogleTranslator(source='en', target='ru')  # Google
 
         # Передаем сессии в таск
         scheduler.modify_job(job_id="job_1", kwargs={'conn': conn, "gt": gt})
+        scheduler.start()
 
         await Logger(APP_NAME).success(msg="Планировщик запущен.", func_name="startup")
         while True:
