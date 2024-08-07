@@ -64,21 +64,21 @@ async def main():
     """
     Функция запуска планировщика
     """
-    scheduler.start()
-
-    # Инициализируем соединение с redis
-    conn = await init_conn()  # Redis подключения
-    gt = GoogleTranslator(source='en', target='ru')  # Google сессия
-
-    # Передаем сессии в таск
-    scheduler.modify_job(job_id="job_1", kwargs={'conn': conn, "gt": gt})
-
-    await Logger(APP_NAME).success(msg="Планировщик запущен.", func_name="startup")
-    while True:
-        await sleep(1000)
-
-if __name__ == '__main__':
     try:
-        run(main())
+        scheduler.start()
+
+        # Инициализируем соединение с redis
+        conn = await init_conn()  # Redis подключения
+        gt = GoogleTranslator(source='en', target='ru')  # Google сессия
+
+        # Передаем сессии в таск
+        scheduler.modify_job(job_id="job_1", kwargs={'conn': conn, "gt": gt})
+
+        await Logger(APP_NAME).success(msg="Планировщик запущен.", func_name="startup")
+        while True:
+            await sleep(1000)
     except (KeyboardInterrupt, SystemExit):
         pass
+
+if __name__ == '__main__':
+    run(main())
