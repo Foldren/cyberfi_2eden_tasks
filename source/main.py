@@ -1,9 +1,9 @@
-from asyncio import sleep, run
+from asyncio import run
 from deep_translator import GoogleTranslator
 from ujson import loads
 from components.pydantic_models import Connection
 from config import APP_NAME, GPT_SYSTEM_MESSAGES
-from init_conn import init_conn
+from init import init_conn, start_sheduler
 from modules.logger import Logger
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
@@ -64,20 +64,15 @@ async def main():
     """
     Функция запуска планировщика
     """
-    try:
-        # Инициализируем соединения с Redis, Google, OpenAI
-        conn = await init_conn()  # Redis подключения
-        gt = GoogleTranslator(source='en', target='ru')  # Google
+    # Инициализируем соединения с Redis, Google, OpenAI
+    conn = await init_conn()  # Redis подключения
+    gt = GoogleTranslator(source='en', target='ru')  # Google
 
-        # Передаем сессии в таск
-        scheduler.modify_job(job_id="job_1", kwargs={'conn': conn, "gt": gt})
-        scheduler.start()
+    # Передаем сессии в таск
+    scheduler.modify_job(job_id="job_1", kwargs={'conn': conn, "gt": gt})
 
-        await Logger(APP_NAME).success(msg="Планировщик запущен.", func_name="startup")
-        while True:
-            await sleep(1000)
-    except (KeyboardInterrupt, SystemExit):
-        pass
+    # Запускаем таск менеджер
+    await start_sheduler(scheduler)
 
 if __name__ == '__main__':
     run(main())

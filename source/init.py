@@ -1,12 +1,29 @@
+from asyncio import sleep
 from aiogram import Bot
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from httpx import AsyncClient
 from openai import AsyncOpenAI
 from redis.asyncio import from_url
 from redisvl.index import AsyncSearchIndex
 from components.pydantic_models import Connection, RedisConnection
-from config import REDISVL_YAML_URL, AI_API_TOKEN, PROXY6NET_PROXIES, REDIS_URL, BOT_TOKEN
+from config import REDISVL_YAML_URL, AI_API_TOKEN, PROXY6NET_PROXIES, REDIS_URL, BOT_TOKEN, APP_NAME
+from modules.logger import Logger
+
+
+async def start_sheduler(sch: AsyncIOScheduler) -> None:
+    """
+    Функция для запуска APSheduler (по инструкции)
+    :param sch: объект таск менеджера AsyncIOScheduler
+    """
+    try:
+        sch.start()
+        await Logger(APP_NAME).success(msg="Планировщик запущен.", func_name="startup")
+        while True:
+            await sleep(1000)
+    except (KeyboardInterrupt, SystemExit):
+        pass
 
 
 async def init_conn() -> Connection:
