@@ -10,10 +10,14 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 scheduler = AsyncIOScheduler()
 
 
-async def get_ai_answers(conn: Connection, gt: GoogleTranslator):
+@scheduler.scheduled_job(id="job_1", trigger="interval", seconds=5)
+async def get_ai_answers(**kwargs):
     """
     Запускаем таск на получение ответов на вопросы юзеров через OpenAI с проверкой каждые 5 сек.
     """
+
+    conn: Connection = kwargs['conn']  # Redis подключения
+    gt: GoogleTranslator = kwargs['gt']  # Google сессия
 
     try:
         lst_chat_id = await conn.rs.questions.keys()
@@ -66,8 +70,8 @@ async def main():
     conn = await init_conn()  # Redis подключения
     gt = GoogleTranslator(source='en', target='ru')  # Google сессия
 
-    # Добавляем таск на 5 секунд
-    scheduler.add_job(get_ai_answers, trigger="interval", seconds=5, kwargs={'conn': conn, "gt": gt})
+    # Передаем сессии в таск
+    scheduler.modify_job(job_id="job_1", kwargs={'conn': conn, "gt": gt})
 
     await Logger(APP_NAME).success(msg="Планировщик запущен.", func_name="startup")
     while True:
