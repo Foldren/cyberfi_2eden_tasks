@@ -7,14 +7,16 @@ from httpx import AsyncClient
 from openai import AsyncOpenAI
 from redis.asyncio import from_url
 from redisvl.index import AsyncSearchIndex
+from tortoise import Tortoise
 from components.pydantic_models import Connection, RedisConnection
-from config import REDISVL_YAML_URL, AI_API_TOKEN, PROXY6NET_PROXIES, REDIS_URL, BOT_TOKEN, APP_NAME
+from config import REDISVL_YAML_URL, AI_API_TOKEN, PROXY6NET_PROXIES, REDIS_URL, BOT_TOKEN, APP_NAME, TORTOISE_CONFIG
 from modules.logger import Logger
 
 
 async def start_sheduler(sch: AsyncIOScheduler) -> None:
     """
-    Функция для запуска APSheduler (по инструкции)
+    Функция для запуска APSheduler
+    (по инструкции https://github.com/agronholm/apscheduler/blob/3.x/examples/schedulers/asyncio_.py)
     :param sch: объект таск менеджера AsyncIOScheduler
     """
     try:
@@ -47,3 +49,7 @@ async def init_conn() -> Connection:
     )
 
     return conn
+
+
+async def init_db():
+    await Tortoise.init(config=TORTOISE_CONFIG)

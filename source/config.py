@@ -15,6 +15,8 @@ REDIS_URL = environ['REDIS_URL']
 
 REDISVL_YAML_URL = ".redisvl.yaml"
 
+API_PG_URL = environ['API_PG_URL']
+
 GPT_SYSTEM_MESSAGES = (
     {
         "role": "system",
@@ -39,3 +41,14 @@ GPT_SYSTEM_MESSAGES = (
         "content": "Your answer must be a valid json string."
     },
 )
+
+TORTOISE_CONFIG = {
+    "connections": {
+        "api": API_PG_URL
+    },
+    "apps": {
+        "api": {"models": ["db_models.api"], "default_connection": "api"}
+    },
+    'use_tz': True,
+    'timezone': 'Europe/Moscow'
+}
