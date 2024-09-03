@@ -1,0 +1,15 @@
+services:
+  sheduler:
+    build: .
+    container_name: sheduler
+    restart: unless-stopped
+    environment:
+      - TZ=Europe/Moscow
+    networks:
+      - 2eden_network
+    volumes:
+      - ./source:/home
+
+networks:
+  2eden_network:
+    external: true
