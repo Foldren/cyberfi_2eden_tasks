@@ -1,5 +1,5 @@
 from tortoise.exceptions import OperationalError
-from ..config import APP_NAME
+from config import APP_NAME
 from db_models.api import Stats, Leader
 from modules.logger import Logger
 

@@ -7,9 +7,8 @@ from httpx import AsyncClient
 from openai import AsyncOpenAI
 from redis.asyncio import from_url
 from redisvl.index import AsyncSearchIndex
-from tortoise import Tortoise
 from components.pydantic_models import Connection, RedisConnection
-from config import REDISVL_YAML_URL, AI_API_TOKEN, PROXY6NET_PROXIES, REDIS_URL, BOT_TOKEN, APP_NAME, TORTOISE_CONFIG
+from config import REDISVL_YAML_URL, AI_API_TOKEN, PROXY6NET_PROXIES, REDIS_URL, BOT_TOKEN, APP_NAME
 from modules.logger import Logger
 
 
@@ -49,7 +48,3 @@ async def init_conn() -> Connection:
     )
 
     return conn
-
-
-async def init_db():
-    await Tortoise.init(config=TORTOISE_CONFIG)

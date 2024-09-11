@@ -1,7 +1,7 @@
 from deep_translator import GoogleTranslator
 from ujson import loads
 from components.pydantic_models import Connection
-from ..config import APP_NAME, GPT_SYSTEM_MESSAGES
+from config import APP_NAME, GPT_SYSTEM_MESSAGES
 from modules.logger import Logger
 
 

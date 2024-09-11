@@ -1,8 +1,9 @@
 from asyncio import run
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 # from deep_translator import GoogleTranslator
-from tortoise import run_async
-from init import init_conn, start_sheduler, init_db
+from tortoise import run_async, Tortoise
+from config import PG_URL
+from init import init_conn, start_sheduler
 # from tasks.ai_bot import get_ai_answers
 from tasks.api import send_reward_to_leaders
 
@@ -26,5 +27,5 @@ async def main():
     await start_sheduler(scheduler)
 
 if __name__ == '__main__':
-    run_async(init_db())
+    run_async(Tortoise.init(db_url=PG_URL, modules={'api': ['db_models.api']}))
     run(main())
