@@ -1,27 +1,11 @@
 from datetime import datetime, timedelta
 from uuid import uuid4
-from fastapi_admin.models import AbstractAdmin
 from pytz import timezone
 from tortoise import Model, Tortoise
 from tortoise.contrib.pydantic import pydantic_model_creator, pydantic_queryset_creator
 from tortoise.fields import BigIntField, DateField, CharEnumField, CharField, DatetimeField, \
-    OnDelete, ForeignKeyField, OneToOneField, BinaryField, \
-    OneToOneRelation, ReverseRelation, FloatField, BooleanField
+    OnDelete, ForeignKeyField, OneToOneField, OneToOneRelation, ReverseRelation, FloatField, BooleanField
 from components.enums import RankName, RewardTypeName, VisibilityType, ConditionType
-
-
-class Admin(AbstractAdmin):
-    id = BigIntField(pk=True)
-    username = CharField(max_length=255, unique=True)
-    password = CharField(max_length=255)
-    is_superuser = BooleanField(default=False)
-    is_active = BooleanField(default=False)
-
-    def __str__(self):
-        return self.username
-
-    class Meta:
-        table = "admins"
 
 
 class Rank(Model):  # В системе изначально создаются все 10 рангов
@@ -42,7 +26,7 @@ class Rank(Model):  # В системе изначально создаются 
 
 
 class User(Model):
-    id = BigIntField(pk=True)
+    id = BigIntField(pk=True)  # = chat_id в телеграм
     rank = ForeignKeyField(model_name="api.Rank", on_delete=OnDelete.CASCADE, related_name="users", default=1)
     referrer = ForeignKeyField(model_name="api.User", on_delete=OnDelete.CASCADE, related_name="leads", null=True)
     leads: ReverseRelation["User"]
@@ -50,13 +34,11 @@ class User(Model):
     activity: OneToOneRelation["Activity"]
     rewards: ReverseRelation["Reward"]
     leader_place: OneToOneRelation["Leader"]
-    chat_id = BigIntField(index=True, unique=True)
-    token = BinaryField()
     country = CharField(max_length=50)  # -
-    referral_code = CharField(max_length=40, default=uuid4(), unique=True)
+    referral_code = CharField(max_length=40, default=uuid4, unique=True)
 
     def __str__(self):
-        return self.chat_id
+        return self.id
 
     class Meta:
         table = "users"
@@ -85,7 +67,7 @@ class Stats(Model):
     id = BigIntField(pk=True)
     user = OneToOneField(model_name="api.User", on_delete=OnDelete.CASCADE, related_name="stats")
     coins = BigIntField(default=1000)
-    energy = BigIntField(default=2000)
+    energy = FloatField(default=2000)
     earned_week_coins = BigIntField(default=0)
     invited_friends = BigIntField(default=0)
     inspirations = BigIntField(default=0)
@@ -98,7 +80,7 @@ class Stats(Model):
 class Reward(Model):
     id = BigIntField(pk=True)
     user = ForeignKeyField(model_name="api.User", on_delete=OnDelete.CASCADE, related_name="rewards")
-    type_name = CharEnumField(enum_type=RewardTypeName, default=RankName.ACOLYTE, description='Награда')
+    type_name = CharEnumField(enum_type=RewardTypeName, default=RewardTypeName.REFERRAL, description='Награда')
     amount = BigIntField(default=0)
     inspirations = BigIntField(default=0)
     replenishments = BigIntField(default=0)
@@ -188,9 +170,3 @@ Tortoise.init_models(["db_models.api"], "api")
 
 User_Pydantic = pydantic_model_creator(User, name="User")
 User_Pydantic_List = pydantic_queryset_creator(User, name="UserList")
-
-# Reward_Pydantic = pydantic_model_creator(Reward, name="Reward")
-# Reward_Pydantic_List = pydantic_queryset_creator(Reward, name="RewardList")
-#
-# Stats_Pydantic = pydantic_model_creator(Stats, name="Stats")
-# Stats_Pydantic_List = pydantic_queryset_creator(Stats, name="StatsList")
