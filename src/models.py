@@ -4,8 +4,9 @@ from pytz import timezone
 from tortoise import Model, Tortoise
 from tortoise.contrib.pydantic import pydantic_model_creator, pydantic_queryset_creator
 from tortoise.fields import BigIntField, DateField, CharEnumField, CharField, DatetimeField, \
-    OnDelete, ForeignKeyField, OneToOneField, OneToOneRelation, ReverseRelation, FloatField, BooleanField
-from components.enums import RankName, RewardTypeName, VisibilityType, ConditionType
+    OnDelete, ForeignKeyField, OneToOneField, OneToOneRelation, ReverseRelation, FloatField, BooleanField, BinaryField
+from tortoise_vector.field import VectorField
+from components.enums import RankName, RewardTypeName, VisibilityType, ConditionType, QuestionStatus
 
 
 class Rank(Model):  # В системе изначально создаются все 10 рангов
@@ -21,9 +22,6 @@ class Rank(Model):  # В системе изначально создаются 
     def __str__(self):
         return self.id
 
-    class Meta:
-        table = "ranks"
-
 
 class User(Model):
     id = BigIntField(pk=True)  # = chat_id в телеграм
@@ -33,18 +31,13 @@ class User(Model):
     stats: OneToOneRelation["Stats"]
     activity: OneToOneRelation["Activity"]
     rewards: ReverseRelation["Reward"]
+    questions: OneToOneRelation["Question"]
     leader_place: OneToOneRelation["Leader"]
     country = CharField(max_length=50)  # -
     referral_code = CharField(max_length=40, default=uuid4, unique=True)
 
     def __str__(self):
         return self.id
-
-    class Meta:
-        table = "users"
-
-    class PydanticMeta:
-        exclude = ("token", "leads")
 
 
 class Activity(Model):
@@ -59,9 +52,6 @@ class Activity(Model):
     is_active_mining = BooleanField(default=False)
     active_days = BigIntField(default=0)
 
-    class Meta:
-        table = "activities"
-
 
 class Stats(Model):
     id = BigIntField(pk=True)
@@ -73,9 +63,6 @@ class Stats(Model):
     inspirations = BigIntField(default=0)
     replenishments = BigIntField(default=0)
 
-    class Meta:
-        table = "stats"
-
 
 class Reward(Model):
     id = BigIntField(pk=True)
@@ -85,17 +72,21 @@ class Reward(Model):
     inspirations = BigIntField(default=0)
     replenishments = BigIntField(default=0)
 
-    class Meta:
-        table = "rewards"
-
 
 class Leader(Model):
     place = BigIntField(pk=True)
     user = OneToOneField(model_name="api.User", on_delete=OnDelete.CASCADE, related_name="leader_place")
     earned_week_coins = BigIntField(default=0)
 
-    class Meta:
-        table = "leaders"
+
+class Question(Model):
+    id = BigIntField(pk=True)
+    creator = ForeignKeyField('api.User', on_delete=OnDelete.CASCADE, related_name='questions')
+    sent = DatetimeField(auto_now_add=True)
+    text = CharField(max_length=1000)
+    answer = CharField(max_length=1000)
+    embedding = VectorField(vector_size=384)
+    status = CharEnumField(enum_type=QuestionStatus, default=QuestionStatus.IN_PROGRESS, description='Статус')
 
 
 # ------ Условия выполнения задач ------
@@ -167,6 +158,7 @@ class UserTask(Model):
 
 
 Tortoise.init_models(["db_models.api"], "api")
+
 
 User_Pydantic = pydantic_model_creator(User, name="User")
 User_Pydantic_List = pydantic_queryset_creator(User, name="UserList")
