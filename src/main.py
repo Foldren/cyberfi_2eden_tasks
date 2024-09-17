@@ -5,23 +5,24 @@ from tortoise import run_async, Tortoise
 from tortoise.exceptions import OperationalError
 from ujson import loads
 from components.enums import QuestionStatus, RewardTypeName
-from components.pydantic_models import Connection
+from components.tools import split_list, find_near_question
 from config import APP_NAME, GPT_SYSTEM_MESSAGES
 from config import PG_URL
 from init import init_conn
 from models import Question, Stats, Leader, Reward
 from modules.logger import Logger
 
-# Задаем подключения Redis, Google
+# Задаем подключения Redis и Google Translator
+# db0 - для хранения индексов
 conn = init_conn()
-gt = GoogleTranslator(source='en', target='ru')
+gt_en_to_ru = GoogleTranslator(source='en', target='ru')
 
 
 @aiocron.crontab("0 3 * * */1")
 async def send_reward_to_leaders():
     """
     Таск на отправку наград первым 50 лидерам по добычи в неделю, обнуляет добычу в неделю у игроков.
-    Выполняется в 3:00 каждой понедельник.
+    Выполняется в 3:00 каждый понедельник.
     """
 
     leaders_stats = await Stats.all().order_by('-earned_week_coins').limit(50)
@@ -71,13 +72,10 @@ async def send_reward_to_leaders():
 
 
 @aiocron.crontab("0 */1 * * *", start=False)
-async def get_ai_answers(**kwargs):
+async def get_ai_answers():
     """
     Запускаем таск на получение ответов на вопросы юзеров через OpenAI с проверкой каждый час.
     """
-
-    conn: Connection = kwargs['conn']  # Redis, OpenAI подключения
-    gt: GoogleTranslator = kwargs['gt']  # Google
 
     try:
         questions = await Question(status=QuestionStatus.IN_PROGRESS).all()
@@ -87,31 +85,54 @@ async def get_ai_answers(**kwargs):
             await Logger(APP_NAME).info(msg="Вопросов нет, ожидание 60 минут.", func_name="get_ai_questions")
             return
 
-        # Формируем ответы через OpenAI
-        gpt_quests = [{"question": q.text, "acolyte_id": q.user_id} for q in questions]
-        gpt_msgs = GPT_SYSTEM_MESSAGES + ({"role": "system", "content": f"Questions:{gpt_quests}"},)
-        gpt_resp = await conn.ai_client.chat.completions.create(model="gpt-3.5-turbo",
-                                                             messages=gpt_msgs,
-                                                             max_tokens=100,
-                                                             temperature=1,
-                                                             stop=None,
-                                                             timeout=30)
+        # Сперва проверка на похожий вопрос в Redis --------------------------------------------------------------------
+        gpt_questions = []
+        gpt_model_qs = []
+        index_model_qs = []
+        rewards = []
+        for q in questions:
+            vector, index_answer = await find_near_question(index=conn.rs.index, question=q.text)
+            # Сохраняем вектор в бд и меняем статус
+            q.embedding = vector
+            q.status = QuestionStatus.HAVE_ANSWER
+            # Формируем список наград
+            rewards.append(Reward(user_id=q.user_id, inspirations=1, replenishments=(1 if q.secret else 0)))
 
-        gpt_dict_resp = loads(gpt_resp.choices[0].message.content)
+            # Если нет похожего, тогда добавляем вопрос в список для AI
+            if index_answer is None:
+                gpt_questions.append({"question": q.text, "acolyte_id": q.user_id})
+                gpt_model_qs.append(q)
+            else:
+                q.answer = index_answer
+                index_model_qs.append(q)
+
+        chunk_quests = split_list(gpt_questions, len(gpt_questions)//40)  # делим список вопросов на чанки по 40
+
+        # Теперь ищем ответы у AI --------------------------------------------------------------------------------------
+        gpt_answers = []
+        for questions in chunk_quests:  # отправляем вопросы пачками в ai
+            gpt_msgs = GPT_SYSTEM_MESSAGES + ({"role": "system", "content": f"Questions:{questions}"},)
+            gpt_resp = await conn.ai_client.chat.completions.create(model="gpt-3.5-turbo",
+                                                                    messages=gpt_msgs,
+                                                                    max_tokens=100,
+                                                                    temperature=1,
+                                                                    stop=None,
+                                                                    timeout=30)
+
+            gpt_answers += loads(gpt_resp.choices[0].message.content)
 
         # Формируем список вопросов для загрузки в бд + сохраняем ответы
-        loads_new_answ = []
-        for q, answ in zip(questions, gpt_dict_resp):
-            ru_answ = gt.translate(answ['answer'])
-            loads_new_answ.append({"question": q.text, "answer": ru_answ, "embedding": q.embedding})
-
-        #todo Сделать
-        await Reward.create(user_id=user_id, inspirations=1, replenishments=(1 if last_question.secret else 0))
+        index_load_answers = []
+        for q, a in zip(gpt_model_qs, gpt_answers):
+            q.answer = gt_en_to_ru.translate(a['answer'])
+            index_load_answers.append({"question": q["question"], "answer": a['answer'], "embedding": q.embedding})
 
         # Загружаем ответы в db 0
-        await conn.rs.index.load(loads_new_answ)
-        # Удаляем вопросы из db 14
-        await conn.rs.questions.delete(*lst_chat_id)
+        await conn.rs.index.load(index_load_answers)
+        # Обновляем атрибуты вопросов
+        await Question.bulk_update(gpt_model_qs + index_model_qs, fields=['answer', "status", "embedding"])
+        # Создаем награды
+        await Reward.bulk_create(rewards, ignore_conflicts=True)
 
         await Logger(APP_NAME).success(msg="AI сгенерировал ответы, ожидание вопросов.",
                                        func_name="get_ai_questions")

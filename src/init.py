@@ -25,7 +25,7 @@ def init_conn() -> Connection:
     conn = Connection(
         bot=Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML)),
         ai_client=AsyncOpenAI(api_key=AI_API_TOKEN, http_client=AsyncClient(proxies=PROXY6NET_PROXIES)),
-        rs=RedisConnection(questions=Redis.from_url(url=REDIS_URL, db=14, decode_responses=True), index=index)
+        rs=RedisConnection(questions=Redis.from_url(url=REDIS_URL, db=0, decode_responses=True), index=index)
     )
 
     return conn
