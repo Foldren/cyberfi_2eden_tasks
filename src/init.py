@@ -1,4 +1,3 @@
-from asyncio import run
 from aiogram import Bot
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
@@ -7,19 +6,19 @@ from openai import AsyncOpenAI
 from redis.asyncio import Redis
 from redisvl.index import AsyncSearchIndex
 from components.pydantic_models import Connection, RedisConnection
-from config import REDISVL_YAML_URL, AI_API_TOKEN, PROXY6NET_PROXIES, REDIS_URL, BOT_TOKEN
+from config import REDISVL_YAML_URL, AI_API_TOKEN, PROXY6NET_PROXIES, REDIS_URL, BOT_TOKEN, APP_NAME
 
 
-def init_conn() -> Connection:
+async def init_conn() -> Connection:
     """
     Функция для создания индекса и подключений к redis, боту, ai.
     :return:
     """
     index: AsyncSearchIndex = AsyncSearchIndex.from_yaml(REDISVL_YAML_URL)
     # подключаемся к redis, берет REDIS_URL из env
-    run(index.connect())
+    await index.connect(redis_url=REDIS_URL)
     # создаем индекс (по умолчанию не создает если есть, либо указать overwrite=True, если нужно пересоздать)
-    run(index.create())
+    await index.create()
 
     # новые вопросы хранятся в бд 14
     conn = Connection(
