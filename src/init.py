@@ -1,3 +1,4 @@
+import logging
 from aiogram import Bot
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
@@ -6,7 +7,11 @@ from openai import AsyncOpenAI
 from redis.asyncio import Redis
 from redisvl.index import AsyncSearchIndex
 from components.pydantic_models import Connection, RedisConnection
-from config import REDISVL_YAML_URL, AI_API_TOKEN, PROXY6NET_PROXIES, REDIS_URL, BOT_TOKEN, APP_NAME
+from config import REDISVL_YAML_URL, AI_API_TOKEN, PROXY6NET_PROXIES, REDIS_URL, BOT_TOKEN
+
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
+logging.getLogger('index').setLevel(logging.DEBUG)
 
 
 async def init_conn() -> Connection:

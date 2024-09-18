@@ -1,20 +1,19 @@
-from asyncio import run
+from traceback import print_exc
+from warnings import filterwarnings
 from aioclock import Group, Cron, Every
 from deep_translator import GoogleTranslator
+from sentence_transformers import SentenceTransformer
 from tortoise.exceptions import OperationalError
 from ujson import loads
 from components.enums import QuestionStatus, RewardTypeName
-from components.tools import find_near_question
+from components.tools import find_near_question, split_list
 from config import APP_NAME, GPT_SYSTEM_MESSAGES
 from init import init_conn
 from models import Question, Stats, Leader, Reward
 from modules.logger import Logger
 
 group = Group()
-
-# Задаем подключения Redis и Google Translator
-gt_en_to_ru = GoogleTranslator(source='en', target='ru')
-conn = run(init_conn())
+filterwarnings("ignore", category=FutureWarning, message=r".*clean_up_tokenization_spaces.*")
 
 
 @group.task(trigger=Cron(cron="0 3 * * */1", tz="Europe/Moscow"))
@@ -70,27 +69,33 @@ async def send_reward_to_leaders():
                                 func_name="leaderboard_reward")
 
 
-@group.task(trigger=Every(hours=1))
+@group.task(trigger=Every(minutes=1))
 async def get_ai_answers():
     """
     Запускаем таск на получение ответов на вопросы юзеров через OpenAI с проверкой каждый час.
     """
+    # Задаем подключения Redis и Google Translator
+    gt_en_to_ru = GoogleTranslator(source='en', target='ru')
+    conn = await init_conn()
 
     try:
-        questions = await Question(status=QuestionStatus.IN_PROGRESS).all()
+        questions = await Question.filter(status=QuestionStatus.IN_PROGRESS).all()
 
         # Если нет вопросов ждем 1 час и смотрим вопросы снова
         if not questions:
             await Logger(APP_NAME).info(msg="Вопросов нет, ожидание 60 минут.", func_name="get_ai_questions")
             return
+        else:
+            await Logger(APP_NAME).info(msg="Старт разбора вопросов юзеров.", func_name="get_ai_questions")
 
         # Сперва проверка на похожий вопрос в Redis --------------------------------------------------------------------
         gpt_questions = []
         gpt_model_qs = []
         index_model_qs = []
         rewards = []
+        model = SentenceTransformer('all-MiniLM-L6-v2')
         for q in questions:
-            vector, index_answer = await find_near_question(index=conn.rs.index, question=q.text)
+            vector, index_answer = await find_near_question(model=model, index=conn.rs.index, question=q.text)
             # Сохраняем вектор в бд и меняем статус
             q.embedding = vector
             q.status = QuestionStatus.HAVE_ANSWER
@@ -124,7 +129,8 @@ async def get_ai_answers():
         index_load_answers = []
         for q, a in zip(gpt_model_qs, gpt_answers):
             q.answer = gt_en_to_ru.translate(a['answer'])
-            index_load_answers.append({"question": q["question"], "answer": a['answer'], "embedding": q.embedding})
+            index_load_answers.append({"question": q.text, "answer": q.answer, "embedding": q.embedding})
+            q.embedding = str(q.embedding)  # Для записи переводим в строку
 
         # Загружаем ответы в db 0
         await conn.rs.index.load(index_load_answers)

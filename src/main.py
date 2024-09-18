@@ -1,7 +1,8 @@
 from asyncio import run
 from contextlib import asynccontextmanager
+from warnings import filterwarnings
 from aioclock import AioClock
-from tortoise import run_async, Tortoise
+from tortoise import Tortoise
 from config import PG_URL, APP_NAME
 from groups.two_eden import group as two_eden
 from modules.logger import Logger
@@ -12,6 +13,7 @@ from modules.logger import Logger
 
 @asynccontextmanager
 async def lifespan(_: AioClock):
+    await Tortoise.init(db_url=PG_URL, modules={'api': ['models']})
     await Logger(APP_NAME).success(msg="Планировщик запущен.", func_name="startup")
     yield _
 
@@ -22,4 +24,3 @@ app.include_group(two_eden)
 
 if __name__ == '__main__':
     run(app.serve())
-    run_async(Tortoise.init(db_url=PG_URL, modules={'api': ['models']}))

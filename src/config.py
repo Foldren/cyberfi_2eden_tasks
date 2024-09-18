@@ -1,6 +1,5 @@
 from os import environ
 from dotenv import load_dotenv
-from sentence_transformers import SentenceTransformer
 
 load_dotenv()
 
@@ -42,5 +41,3 @@ GPT_SYSTEM_MESSAGES = (
 )
 
 PG_URL = environ['PG_URL']
-
-MODEL = SentenceTransformer('all-MiniLM-L6-v2')
