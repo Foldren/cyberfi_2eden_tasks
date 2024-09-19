@@ -1,8 +1,10 @@
 from aiogram import Bot
+from deep_translator import GoogleTranslator
 from openai import AsyncOpenAI
 from pydantic import BaseModel, ConfigDict
 from redis.asyncio import Redis
 from redisvl.index import AsyncSearchIndex
+from sentence_transformers import SentenceTransformer
 
 
 class CustomModel(BaseModel):
@@ -19,3 +21,5 @@ class Connection(CustomModel):
     bot: Bot
     ai_client: AsyncOpenAI
     rs: RedisConnection
+    model: SentenceTransformer
+    gt_to_ru: GoogleTranslator

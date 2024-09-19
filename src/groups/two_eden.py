@@ -1,16 +1,15 @@
-from traceback import print_exc
+from typing import Annotated
 from warnings import filterwarnings
 from aioclock import Group, Cron, Every
-from deep_translator import GoogleTranslator
-from sentence_transformers import SentenceTransformer
 from tortoise.exceptions import OperationalError
 from ujson import loads
-from components.enums import QuestionStatus, RewardTypeName
+from components.pydantic_models import Connection
 from components.tools import find_near_question, split_list
-from config import APP_NAME, GPT_SYSTEM_MESSAGES
+from config import APP_NAME, GPT_SYSTEM_MESSAGES, SECRET_QS
 from init import init_conn
-from models import Question, Stats, Leader, Reward
+from models import Question, Stats, Leader, Reward, RewardType, QuestionStatus
 from modules.logger import Logger
+from aioclock import Depends
 
 group = Group()
 filterwarnings("ignore", category=FutureWarning, message=r".*clean_up_tokenization_spaces.*")
@@ -41,7 +40,7 @@ async def send_reward_to_leaders():
         if i <= 25:
             stats.coins += 10000
 
-        rewards.append(Reward(type_name=RewardTypeName.LEADERBOARD, user_id=stats.user_id, amount=stats.coins,
+        rewards.append(Reward(type_name=RewardType.LEADERBOARD, user_id=stats.user_id, amount=stats.coins,
                               replenishments=1))
 
     await Reward.bulk_create(rewards, ignore_conflicts=True)
@@ -69,14 +68,11 @@ async def send_reward_to_leaders():
                                 func_name="leaderboard_reward")
 
 
-@group.task(trigger=Every(minutes=1))
-async def get_ai_answers():
+@group.task(trigger=Every(seconds=15))
+async def get_ai_answers(conn: Annotated[Connection, Depends(init_conn, cast=False)]):
     """
     Запускаем таск на получение ответов на вопросы юзеров через OpenAI с проверкой каждый час.
     """
-    # Задаем подключения Redis и Google Translator
-    gt_en_to_ru = GoogleTranslator(source='en', target='ru')
-    conn = await init_conn()
 
     try:
         questions = await Question.filter(status=QuestionStatus.IN_PROGRESS).all()
@@ -93,14 +89,18 @@ async def get_ai_answers():
         gpt_model_qs = []
         index_model_qs = []
         rewards = []
-        model = SentenceTransformer('all-MiniLM-L6-v2')
         for q in questions:
-            vector, index_answer = await find_near_question(model=model, index=conn.rs.index, question=q.text)
+            vector, index_answer = await find_near_question(model=conn.model, index=conn.rs.index, question=q.text)
             # Сохраняем вектор в бд и меняем статус
             q.embedding = vector
             q.status = QuestionStatus.HAVE_ANSWER
+            # Проверяем секретный ли вопрос
+            if index_answer in [qst["answer"] for qst in SECRET_QS]:
+                q.secret = True
+
             # Формируем список наград
-            rewards.append(Reward(user_id=q.user_id, inspirations=1, replenishments=(1 if q.secret else 0)))
+            rewards.append(Reward(user_id=q.user_id, inspirations=1, replenishments=(1 if q.secret else 0),
+                                  type=RewardType.AI_QUESTION))
 
             # Если нет похожего, тогда добавляем вопрос в список для AI
             if index_answer is None:
@@ -128,14 +128,14 @@ async def get_ai_answers():
         # Формируем список вопросов для загрузки в бд + сохраняем ответы
         index_load_answers = []
         for q, a in zip(gpt_model_qs, gpt_answers):
-            q.answer = gt_en_to_ru.translate(a['answer'])
+            q.answer = conn.gt_to_ru.translate(a['answer'])
             index_load_answers.append({"question": q.text, "answer": q.answer, "embedding": q.embedding})
             q.embedding = str(q.embedding)  # Для записи переводим в строку
 
         # Загружаем ответы в db 0
         await conn.rs.index.load(index_load_answers)
         # Обновляем атрибуты вопросов
-        await Question.bulk_update(gpt_model_qs + index_model_qs, fields=['answer', "status", "embedding"])
+        await Question.bulk_update(gpt_model_qs + index_model_qs, fields=['answer', "status", "embedding", "secret"])
         # Создаем награды
         await Reward.bulk_create(rewards, ignore_conflicts=True)
 

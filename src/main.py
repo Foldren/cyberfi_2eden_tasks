@@ -1,6 +1,5 @@
 from asyncio import run
 from contextlib import asynccontextmanager
-from warnings import filterwarnings
 from aioclock import AioClock
 from tortoise import Tortoise
 from config import PG_URL, APP_NAME
