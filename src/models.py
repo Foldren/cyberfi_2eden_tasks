@@ -5,7 +5,8 @@ from pytz import timezone
 from tortoise import Model, Tortoise
 from tortoise.contrib.pydantic import pydantic_model_creator, pydantic_queryset_creator
 from tortoise.fields import BigIntField, DateField, CharEnumField, CharField, DatetimeField, \
-    OnDelete, ForeignKeyField, OneToOneField, OneToOneRelation, ReverseRelation, FloatField, BooleanField, TextField
+    OnDelete, ForeignKeyField, OneToOneField, OneToOneRelation, ReverseRelation, FloatField, BooleanField, TextField, \
+    BinaryField
 
 
 # Enums ----------------------------------------------------------------------------------------------------------------
@@ -28,7 +29,7 @@ class RewardType(str, Enum):
     INVITE_FRIENDS = "invite_friends"
     LEADERBOARD = "leaderboard"
     TASK = "task"
-    REFERRAL = "referral"
+    MINING_REFERRAL = "mining_referral"
     AI_QUESTION = "ai_question"
 
 
@@ -75,9 +76,14 @@ class User(Model):
     leader_place: OneToOneRelation["Leader"]
     country = CharField(max_length=50)  # -
     referral_code = CharField(max_length=40, default=uuid4, unique=True)
+    username = CharField(max_length=50)
+    avatar = BinaryField(null=True)
 
     def __str__(self):
         return self.id
+
+    class PydanticMeta:
+        exclude = ("rewards", "questions", "leader_place")
 
 
 class Activity(Model):
@@ -107,7 +113,7 @@ class Stats(Model):
 class Reward(Model):
     id = BigIntField(pk=True)
     user = ForeignKeyField(model_name="api.User", on_delete=OnDelete.CASCADE, related_name="rewards")
-    type = CharEnumField(enum_type=RewardType, default=RewardType.REFERRAL, description='Награда')
+    type = CharEnumField(enum_type=RewardType, default=RewardType.MINING_REFERRAL, description='Награда')
     amount = BigIntField(default=0)
     inspirations = BigIntField(default=0)
     replenishments = BigIntField(default=0)
@@ -129,6 +135,9 @@ class Question(Model):
     embedding = TextField(null=True)
     secret = BooleanField(default=0)
     status = CharEnumField(enum_type=QuestionStatus, default=QuestionStatus.IN_PROGRESS, description='Статус')
+
+    class PydanticMeta:
+        exclude = ("embedding", "text", "user")
 
 
 # ------ Условия выполнения задач ------
@@ -202,5 +211,6 @@ class UserTask(Model):
 # Pydantic -------------------------------------------------------------------------------------------------------------
 Tortoise.init_models(["models"], "api")
 User_Pydantic = pydantic_model_creator(User, name="User")
-Questions_Pydantic_List = pydantic_queryset_creator(Question, name="Questions",
-                                                    exclude=("embedding", "text", "secret", "user"))
+Question_Pydantic = pydantic_model_creator(Question, name="Question")
+Questions_Pydantic_List = pydantic_queryset_creator(Question, name="Questions")
+Tasks_Pydantic_List = pydantic_queryset_creator(Task, name="Tasks")
