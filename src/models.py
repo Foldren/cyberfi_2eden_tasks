@@ -113,7 +113,7 @@ class Stats(Model):
 class Reward(Model):
     id = BigIntField(pk=True)
     user = ForeignKeyField(model_name="api.User", on_delete=OnDelete.CASCADE, related_name="rewards")
-    type = CharEnumField(enum_type=RewardType, default=RewardType.MINING_REFERRAL, description='Награда')
+    type = CharEnumField(enum_type=RewardType, description='Награда')
     amount = BigIntField(default=0)
     inspirations = BigIntField(default=0)
     replenishments = BigIntField(default=0)
